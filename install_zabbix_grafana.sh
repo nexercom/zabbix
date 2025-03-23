@@ -18,7 +18,7 @@ ZABBIX_RELEASE_DEB="zabbix-release_latest_6.0+ubuntu22.04_all.deb"
 ###############################################
 
 # PASO 2: Instalar repositorio de Zabbix
-wget https://repo.zabbix.com/zabbix/6.0/ubuntu-arm64/pool/main/z/zabbix-release/${ZABBIX_RELEASE_DEB} -O ${ZABBIX_RELEASE_DEB}
+wget https://repo.zabbix.com/zabbix/6.0/ubuntu/pool/main/z/zabbix-release/${ZABBIX_RELEASE_DEB} -O ${ZABBIX_RELEASE_DEB}
 dpkg -i ${ZABBIX_RELEASE_DEB}
 apt update
 
