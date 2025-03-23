@@ -10,7 +10,7 @@ fi
 echo "Iniciando instalación de Zabbix 6 y Grafana..."
 
 # Variables: ajusta la contraseña de la BBDD según tu necesidad.
-ZABBIX_DB_PASSWORD="tu_contraseña_segura"
+ZABBIX_DB_PASSWORD="mandrake"
 ZABBIX_RELEASE_DEB="zabbix-release_latest_6.0+ubuntu22.04_all.deb"
 
 ###############################################
