@@ -45,6 +45,12 @@ mysql -uroot -e "SET GLOBAL log_bin_trust_function_creators = 0;"
 sed -i 's/^# DBPassword=/DBPassword=/' /etc/zabbix/zabbix_server.conf
 sed -i "s/DBPassword=.*/DBPassword=${ZABBIX_DB_PASSWORD}/" /etc/zabbix/zabbix_server.conf
 
+# Descomenta y configura StartPingers en 300
+sed -i 's/^#\s*StartPingers=.*/StartPingers=300/' /etc/zabbix/zabbix_server.conf
+
+# Descomenta y configura CacheSize en 6G
+sed -i 's/^#\s*CacheSize=.*/CacheSize=6G/' /etc/zabbix/zabbix_server.conf
+
 # PASO 8: Iniciar y habilitar los servicios de Zabbix y Apache
 systemctl restart zabbix-server zabbix-agent apache2
 systemctl enable zabbix-server zabbix-agent apache2
