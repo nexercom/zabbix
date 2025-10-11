@@ -3,8 +3,6 @@ cat <<'EOF'
 ==========================================================
  Script: Instalación Zabbix 7.4 + Grafana en Ubuntu 24.04
  Autor: Steven Montero
- Versión: 1.0 - Octubre 2025
- Uso:    sudo bash install_zabbix74_grafana.sh
 ==========================================================
 EOF
 
