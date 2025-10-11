@@ -1,10 +1,14 @@
 #!/bin/bash
-# ==========================================================
-# Script: Instalación Zabbix 7.4 + Grafana en Ubuntu 24.04
-# Autor: Steven Montero
-# Versión: 1.0 - Octubre 2025
-# Uso:    sudo bash install_zabbix74_grafana.sh
-# ==========================================================
+cat <<'EOF'
+==========================================================
+ Script: Instalación Zabbix 7.4 + Grafana en Ubuntu 24.04
+ Autor: Steven Montero
+ Versión: 1.0 - Octubre 2025
+ Uso:    sudo bash install_zabbix74_grafana.sh
+==========================================================
+EOF
+
+echo
 
 set -euo pipefail
 
@@ -98,8 +102,6 @@ systemctl restart apache2 >/dev/null 2>&1
 systemctl enable apache2 >/dev/null 2>&1
 systemctl restart zabbix-server zabbix-agent >/dev/null 2>&1
 systemctl enable zabbix-server zabbix-agent >/dev/null 2>&1
-
-echo "✅ Zabbix Web:  http://<IP_SERVIDOR>/zabbix (Admin / zabbix)"
 
 # ----------------------------------------------------------
 # 7) Grafana
