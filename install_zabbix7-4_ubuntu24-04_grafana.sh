@@ -153,7 +153,7 @@ systemctl restart grafana-server >/dev/null 2>&1
 # ----------------------------------------------------------
 # 8) Locale (al final)
 # ----------------------------------------------------------
-echo "🌐 Ajustando locale (en_US.UTF-8) sin reiniciar..."
+echo "🌐 Ajustando locale (en_US.UTF-8)"
 
 apt-get install -y locales >/dev/null 2>&1 || true
 sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
