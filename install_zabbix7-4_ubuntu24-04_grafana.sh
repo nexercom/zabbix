@@ -1,4 +1,6 @@
 #!/bin/bash
+clear
+
 cat <<'EOF'
 ==========================================================
  Script: Instalación Zabbix 7.4 + Grafana en Ubuntu 24.04
@@ -7,6 +9,35 @@ cat <<'EOF'
 EOF
 
 echo
+
+# ---- Colores ----
+RED="\033[0;31m"
+NC="\033[0m" # No Color
+
+# ---- Variables ----
+ZBX_DB_PASS="q2h5A6MNp6WD"
+TZ_VALUE="America/Santo_Domingo"
+ZBX_REL_FILE="zabbix-release_latest_7.4+ubuntu24.04_all.deb"
+ZBX_REL_URL="https://repo.zabbix.com/zabbix/7.4/release/ubuntu/pool/main/z/zabbix-release/${ZBX_REL_FILE}"
+
+# ---- Funciones de verificación ----
+is_root() {
+    if [[ "$(id -u)" -ne 0 ]]; then
+        echo -e "${RED}❌ Error: Este script debe ejecutarse como root (sudo).${NC}"
+        exit 1
+    fi
+}
+
+is_ubuntu_2404() {
+    if ! grep -qi "ubuntu" /etc/os-release || ! grep -qi "24.04" /etc/os-release; then
+        echo -e "${RED}❌ Error: Este script solo es compatible con Ubuntu 24.04 (Noble).${NC}"
+        exit 1
+    fi
+}
+
+# ---- Ejecutar checkers ----
+is_root
+is_ubuntu_2404
 
 set -euo pipefail
 
