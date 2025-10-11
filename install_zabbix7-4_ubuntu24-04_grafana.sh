@@ -153,10 +153,20 @@ systemctl restart grafana-server >/dev/null 2>&1
 # ----------------------------------------------------------
 # 8) Locale (al final)
 # ----------------------------------------------------------
-echo "🌐 Ajustando locale (en_US.UTF-8)..."
+echo "🌐 Ajustando locale (en_US.UTF-8) sin reiniciar..."
+
+apt-get install -y locales >/dev/null 2>&1 || true
+sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
 locale-gen en_US.UTF-8 >/dev/null 2>&1 || true
-update-locale LANG=en_US.UTF-8 >/dev/null 2>&1 || true
-systemctl reload apache2 >/dev/null 2>&1 || true
+update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 >/dev/null 2>&1 || true
+printf 'LANG=en_US.UTF-8\nLC_ALL=en_US.UTF-8\n' > /etc/default/locale
+
+grep -q 'LANG=en_US.UTF-8' /etc/apache2/envvars || echo 'export LANG=en_US.UTF-8' >> /etc/apache2/envvars
+grep -q 'LC_ALL=en_US.UTF-8' /etc/apache2/envvars || echo 'export LC_ALL=en_US.UTF-8' >> /etc/apache2/envvars
+
+systemctl daemon-reexec >/dev/null 2>&1 || true
+systemctl restart apache2 >/dev/null 2>&1 || true
+systemctl restart php8.3-fpm >/dev/null 2>&1 || true  # si existe
 
 # ----------------------------------------------------------
 # Resumen final
