@@ -1,117 +1,135 @@
 #!/bin/bash
 # ==========================================================
-# Script de instalación: Zabbix 7.4 + Grafana en Ubuntu 24.04
+# Script: Instalación Zabbix 7.4 + Grafana en Ubuntu 24.04
 # Autor: Steven Montero
-# Uso: sudo bash install_zabbix7-4_ubuntu24-04_grafana.sh
+# Versión: 1.0 - Octubre 2025
+# Uso:    sudo bash install_zabbix74_grafana.sh
 # ==========================================================
 
-set -e
+set -euo pipefail
 
-LOG_FILE="/var/log/install_zbx74.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
+# ---- Variables ----
+ZBX_DB_PASS="q2h5A6MNp6WD"
+TZ_VALUE="America/Santo_Domingo"
+ZBX_REL_FILE="zabbix-release_latest_7.4+ubuntu24.04_all.deb"
+ZBX_REL_URL="https://repo.zabbix.com/zabbix/7.4/release/ubuntu/pool/main/z/zabbix-release/${ZBX_REL_FILE}"
 
-DB_PASS="q2h5A6MNp6WD"
-ZBX_RELEASE_DEB="zabbix-release_latest_7.4+ubuntu24.04_all.deb"
-ZBX_RELEASE_URL="https://repo.zabbix.com/zabbix/7.4/release/ubuntu/pool/main/z/zabbix-release/${ZBX_RELEASE_DEB}"
+# ---- Comprobaciones ----
+[[ "$(id -u)" -eq 0 ]] || { echo "❌ Ejecuta como root (sudo)."; exit 1; }
+grep -qi "ubuntu" /etc/os-release && grep -qi "24.04" /etc/os-release \
+  || { echo "❌ Este script es para Ubuntu 24.04 (noble)."; exit 1; }
 
-echo "🚀 Instalando Zabbix 7.4 + Grafana (Ubuntu 24.04). Log: $LOG_FILE"
-
-# ----------------------------------------------------------
-# [0] Prepara entorno y locale
-# ----------------------------------------------------------
-echo "📦 Preparando dependencias..."
-apt-get update -qq
-apt-get install -y -qq wget gpg lsb-release locales software-properties-common
-
-echo "🌐 Generando locale en_US.UTF-8..."
-locale-gen en_US.UTF-8 >/dev/null 2>&1
-update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
-export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
+echo "🚀 Instalando Zabbix 7.4 + Grafana en Ubuntu 24.04..."
 
 # ----------------------------------------------------------
-# [1] Añadir repositorio de Zabbix 7.4
+# 0) Preparativos
+# ----------------------------------------------------------
+echo "🧰 Preparando dependencias..."
+apt-get update -y >/dev/null 2>&1
+apt-get install -y wget curl gnupg ca-certificates lsb-release >/dev/null 2>&1
+
+# ----------------------------------------------------------
+# 1) Repositorio Zabbix 7.4
 # ----------------------------------------------------------
 echo "📦 [1/8] Añadiendo repositorio de Zabbix 7.4..."
-wget -q "${ZBX_RELEASE_URL}" -O "${ZBX_RELEASE_DEB}"
-dpkg -i "${ZBX_RELEASE_DEB}" >/dev/null 2>&1
-apt-get update -qq
+wget -q "${ZBX_REL_URL}" -O "/tmp/${ZBX_REL_FILE}" >/dev/null 2>&1
+dpkg -i "/tmp/${ZBX_REL_FILE}" >/dev/null 2>&1
+apt-get update -y >/dev/null 2>&1
 
 # ----------------------------------------------------------
-# [2] Instalar Zabbix y MySQL
+# 2) Instalar Zabbix + MySQL
 # ----------------------------------------------------------
 echo "📦 [2/8] Instalando Zabbix y MySQL..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    zabbix-server-mysql zabbix-frontend-php zabbix-apache-conf \
-    zabbix-sql-scripts zabbix-agent mysql-server php8.3-mbstring php8.3-ldap php8.3-bcmath
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+  zabbix-server-mysql zabbix-frontend-php zabbix-apache-conf \
+  zabbix-sql-scripts zabbix-agent mysql-server >/dev/null 2>&1
 
 # ----------------------------------------------------------
-# [3] Crear base de datos y usuario
+# 3) Base de datos
 # ----------------------------------------------------------
 echo "🗄️ [3/8] Creando base de datos y usuario..."
-mysql -uroot <<EOF
+mysql -uroot >/dev/null 2>&1 <<EOF
 CREATE DATABASE IF NOT EXISTS zabbix CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
-CREATE USER IF NOT EXISTS 'zabbix'@'localhost' IDENTIFIED BY '${DB_PASS}';
+CREATE USER IF NOT EXISTS 'zabbix'@'localhost' IDENTIFIED BY '${ZBX_DB_PASS}';
 GRANT ALL PRIVILEGES ON zabbix.* TO 'zabbix'@'localhost';
 SET GLOBAL log_bin_trust_function_creators = 1;
 FLUSH PRIVILEGES;
 EOF
 
 # ----------------------------------------------------------
-# [4] Importar esquema inicial
+# 4) Importar esquema
 # ----------------------------------------------------------
 echo "📥 [4/8] Importando esquema inicial..."
-zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | \
-    mysql --default-character-set=utf8mb4 -uzabbix -p"${DB_PASS}" zabbix
-mysql -uroot -e "SET GLOBAL log_bin_trust_function_creators = 0;"
+SQL_GZ="/usr/share/zabbix/sql-scripts/mysql/server.sql.gz"
+[[ -f "$SQL_GZ" ]] || SQL_GZ="/usr/share/zabbix-sql-scripts/mysql/server.sql.gz"
+[[ -f "$SQL_GZ" ]] || { echo "❌ No se encontró server.sql.gz en rutas conocidas."; exit 1; }
+
+zcat "$SQL_GZ" | mysql --default-character-set=utf8mb4 -uzabbix -p"${ZBX_DB_PASS}" zabbix >/dev/null 2>&1
+mysql -uroot -e "SET GLOBAL log_bin_trust_function_creators = 0;" >/dev/null 2>&1
 
 # ----------------------------------------------------------
-# [5] Configurar zabbix_server.conf y Apache
+# 5) Configurar Zabbix server y Apache
 # ----------------------------------------------------------
 echo "⚙️ [5/8] Configurando zabbix_server.conf y Apache..."
-ZBX_CONF="/etc/zabbix/zabbix_server.conf"
+apply_or_add () {
+  local key="$1" val="$2" file="$3"
+  if grep -q "^[#[:space:]]*${key}=" "$file"; then
+    sed -i "s|^[#[:space:]]*${key}=.*|${key}=${val}|" "$file"
+  else
+    echo "${key}=${val}" >> "$file"
+  fi
+}
 
-sed -i "s/^[#[:space:]]*DBPassword=.*/DBPassword=${DB_PASS}/" "$ZBX_CONF"
-grep -q '^DBPassword=' "$ZBX_CONF" || echo "DBPassword=${DB_PASS}" >> "$ZBX_CONF"
+apply_or_add "DBPassword" "${ZBX_DB_PASS}" /etc/zabbix/zabbix_server.conf
+apply_or_add "StartPingers" "100" /etc/zabbix/zabbix_server.conf
+apply_or_add "CacheSize"   "4G"  /etc/zabbix/zabbix_server.conf
 
-sed -i 's/^[#[:space:]]*StartPingers=.*/StartPingers=100/' "$ZBX_CONF"
-grep -q '^StartPingers=' "$ZBX_CONF" || echo "StartPingers=100" >> "$ZBX_CONF"
-
-sed -i 's/^[#[:space:]]*CacheSize=.*/CacheSize=1G/' "$ZBX_CONF"
-grep -q '^CacheSize=' "$ZBX_CONF" || echo "CacheSize=1G" >> "$ZBX_CONF"
-
-systemctl restart apache2
+if grep -q "php_value date.timezone" /etc/zabbix/apache.conf; then
+  sed -i "s|php_value date.timezone .*|php_value date.timezone ${TZ_VALUE}|" /etc/zabbix/apache.conf
+else
+  echo "php_value date.timezone ${TZ_VALUE}" >> /etc/zabbix/apache.conf
+fi
 
 # ----------------------------------------------------------
-# [6] Iniciar servicios
+# 6) Iniciar servicios
 # ----------------------------------------------------------
 echo "🚦 [6/8] Iniciando servicios..."
-systemctl restart zabbix-server zabbix-agent apache2
-systemctl enable zabbix-server zabbix-agent apache2 >/dev/null
+systemctl restart apache2 >/dev/null 2>&1
+systemctl enable apache2 >/dev/null 2>&1
+systemctl restart zabbix-server zabbix-agent >/dev/null 2>&1
+systemctl enable zabbix-server zabbix-agent >/dev/null 2>&1
 
-echo "✅ Zabbix Web: http://<IP_SERVIDOR>/zabbix (Admin / zabbix)"
+echo "✅ Zabbix Web:  http://<IP_SERVIDOR>/zabbix (Admin / zabbix)"
 
 # ----------------------------------------------------------
-# [7] Instalar Grafana Enterprise
+# 7) Grafana
 # ----------------------------------------------------------
 echo "📊 [7/8] Instalando Grafana Enterprise..."
-wget -q -O - https://packages.grafana.com/gpg.key | gpg --dearmor > /etc/apt/trusted.gpg.d/grafana.gpg
-echo "deb https://packages.grafana.com/enterprise/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
-apt-get update -qq
-apt-get install -y -qq grafana-enterprise
+install -d -m 0755 /etc/apt/keyrings >/dev/null 2>&1
+curl -fsSL https://packages.grafana.com/gpg.key | gpg --dearmor | tee /etc/apt/keyrings/grafana.gpg >/dev/null 2>&1
+echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://packages.grafana.com/enterprise/deb stable main" \
+  | tee /etc/apt/sources.list.d/grafana.list >/dev/null 2>&1
 
-systemctl daemon-reload
-systemctl enable grafana-server >/dev/null
-systemctl start grafana-server
+apt-get update -y >/dev/null 2>&1
+apt-get install -y grafana-enterprise >/dev/null 2>&1
 
-# Plugin de Zabbix
+systemctl daemon-reload >/dev/null 2>&1
+systemctl enable --now grafana-server >/dev/null 2>&1
+
 grafana-cli plugins install alexanderzobnin-zabbix-app >/dev/null 2>&1 || true
-systemctl restart grafana-server
+systemctl restart grafana-server >/dev/null 2>&1
 
 # ----------------------------------------------------------
-# [8] Finalizar
+# 8) Locale (al final)
 # ----------------------------------------------------------
-echo "🎉 [8/8] Instalación completada."
-echo "➡️ Accede a Zabbix: http://<IP_SERVIDOR>/zabbix"
-echo "➡️ Accede a Grafana: http://<IP_SERVIDOR>:3000 (admin / admin)"
-echo "📝 Log completo en: $LOG_FILE"
+echo "🌐 Ajustando locale (en_US.UTF-8)..."
+locale-gen en_US.UTF-8 >/dev/null 2>&1 || true
+update-locale LANG=en_US.UTF-8 >/dev/null 2>&1 || true
+systemctl reload apache2 >/dev/null 2>&1 || true
+
+# ----------------------------------------------------------
+# Resumen final
+# ----------------------------------------------------------
+echo "🎉 Instalación completada."
+echo "➡️ Zabbix:  http://<IP_SERVIDOR>/zabbix"
+echo "➡️ Grafana: http://<IP_SERVIDOR>:3000  (admin / admin)"
